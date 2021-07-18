@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>test_vonage.html</h1>
+    <p>Report generated on 18-Jul-2021 at 20:23:01 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "0.13.1", "py": "1.10.0", "pytest": "6.2.4"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Linux-5.8.0-59-generic-x86_64-with-glibc2.29</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "1.11.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.8.10</td></tr></table>
+    <h2>Summary</h2>
+    <p>11 tests ran in 42.90 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">5 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">6 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_project/test_user_api.py::test_different_user_payloads</td>
+          <td class="col-duration">8.02</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_different_user_payloads():<br/>        &quot;&quot;&quot;Test different type of paylaod/schema for user post api.&quot;&quot;&quot;<br/>        failed_schemas = []<br/>        for user in USER_PAYLOADS:<br/>            # res = requests.post(URL,data=json.dumps(user),headers=HEADERS)<br/>            res = create_user(user)<br/>            res_code = res.status_code<br/>            print(&quot;Requested Payload: %s&quot; % str(user))<br/>            print(&quot;Response Code: %s.&quot; % res_code)<br/>            print(&quot;Response Text: %s&quot; % res.text)<br/>            if res_code in range(200,300):<br/>                o_user = {}<br/>                o_user.update({<br/>                    &#x27;Status&#x27;: &#x27;Failed&#x27;,<br/>                    &#x27;Payload&#x27;: dict(user),<br/>                    &#x27;Response&#x27;: res_code,<br/>                    &#x27;Response Text&#x27;: res.text<br/>                })<br/>                failed_schemas.append(o_user)<br/>&gt;       assert len(failed_schemas) == 0, &quot;Failed for these payload: %s&quot; % str(failed_schemas)<br/><span class="error">E       AssertionError: Failed for these payload: [{&#x27;Status&#x27;: &#x27;Failed&#x27;, &#x27;Payload&#x27;: {}, &#x27;Response&#x27;: 200, &#x27;Response Text&#x27;: &#x27;{&quot;id&quot;:&quot;USR-418047b9-86ca-4efa-9dda-5c95cc2803a4&quot;,&quot;href&quot;:&quot;https://api.nexmo.com/v0.1/users/USR-418047b9-86ca-4efa-9dda-5c95cc2803a4&quot;}&#x27;}]</span><br/><span class="error">E       assert 1 == 0</span><br/><span class="error">E         +1</span><br/><span class="error">E         -0</span><br/><br/>test_project/test_user_api.py:88: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Requested Payload: {}
+Response Code: 200.
+Response Text: {&quot;id&quot;:&quot;USR-418047b9-86ca-4efa-9dda-5c95cc2803a4&quot;,&quot;href&quot;:&quot;https://api.nexmo.com/v0.1/users/USR-418047b9-86ca-4efa-9dda-5c95cc2803a4&quot;}
+Requested Payload: {&#x27;name&#x27;: &#x27;  &#x27;}
+Response Code: 400.
+Response Text: {&quot;description&quot;:&quot;The request failed because the user name already exists. Please provide a unique user name and try again.&quot;,&quot;code&quot;:&quot;user:error:duplicate-name&quot;}
+Requested Payload: {&#x27;name&#x27;: &#x27;&#x27;}
+Response Code: 400.
+Response Text: {&quot;description&quot;:&quot;Input validation failure.&quot;,&quot;error&quot;:{&quot;name&quot;:[&quot;\&quot;name\&quot; is not allowed to be empty&quot;]},&quot;code&quot;:&quot;http:error:validation-fail&quot;}
+Requested Payload: {&#x27;name&#x27;: 895652}
+Response Code: 400.
+Response Text: {&quot;description&quot;:&quot;Input validation failure.&quot;,&quot;error&quot;:{&quot;name&quot;:[&quot;\&quot;name\&quot; must be a string&quot;]},&quot;code&quot;:&quot;http:error:validation-fail&quot;}
+Requested Payload: {&#x27;name&#x27;: True}
+Response Code: 400.
+Response Text: {&quot;description&quot;:&quot;Input validation failure.&quot;,&quot;error&quot;:{&quot;name&quot;:[&quot;\&quot;name\&quot; must be a string&quot;]},&quot;code&quot;:&quot;http:error:validation-fail&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_project/test_user_api.py::test_different_conversation_payloads</td>
+          <td class="col-duration">7.38</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_different_conversation_payloads():<br/>        &quot;&quot;&quot;Test different type of paylaod/schema for conversation post api.&quot;&quot;&quot;<br/>        failed_schemas = []<br/>        for conv in CONVERSATION_PAYLOADS:<br/>            # res = requests.post(URL,data=json.dumps(conv),headers=HEADERS)<br/>            res = create_conversation(conv)<br/>            res_code = res.status_code<br/>            print(&quot;Requested Payload: %s&quot; % str(conv))<br/>            print(&quot;Response Code: %s.&quot; % res_code)<br/>            print(&quot;Response Text: %s&quot; % res.text)<br/>            if res_code in range(200,300):<br/>                o_conv = {}<br/>                o_conv.update({<br/>                    &#x27;Status&#x27;: &#x27;Failed&#x27;,<br/>                    &#x27;Payload&#x27;: dict(conv),<br/>                    &#x27;Response&#x27;: res_code,<br/>                    &#x27;Response Text&#x27;: res.text<br/>                })<br/>                failed_schemas.append(o_conv)<br/>&gt;       assert len(failed_schemas) == 0, &quot;Failed for these payloads: %s&quot; % str(failed_schemas)<br/><span class="error">E       AssertionError: Failed for these payloads: [{&#x27;Status&#x27;: &#x27;Failed&#x27;, &#x27;Payload&#x27;: {}, &#x27;Response&#x27;: 200, &#x27;Response Text&#x27;: &#x27;{&quot;id&quot;:&quot;CON-ce47742a-d1d6-4c0c-8ad3-af77a9b70670&quot;,&quot;href&quot;:&quot;https://api.nexmo.com/v0.1/conversations/CON-ce47742a-d1d6-4c0c-8ad3-af77a9b70670&quot;}&#x27;}, {&#x27;Status&#x27;: &#x27;Failed&#x27;, &#x27;Payload&#x27;: {&#x27;name&#x27;: &#x27;  &#x27;}, &#x27;Response&#x27;: 200, &#x27;Response Text&#x27;: &#x27;{&quot;id&quot;:&quot;CON-f9d22fe7-a326-44c8-949b-99bede65715d&quot;,&quot;href&quot;:&quot;https://api.nexmo.com/v0.1/conversations/CON-f9d22fe7-a326-44c8-949b-99bede65715d&quot;}&#x27;}, {&#x27;Status&#x27;: &#x27;Failed&#x27;, &#x27;Payload&#x27;: {&#x27;name&#x27;: &#x27;&#x27;}, &#x27;Response&#x27;: 200, &#x27;Response Text&#x27;: &#x27;{&quot;id&quot;:&quot;CON-2ddb95d7-d674-4098-b309-90cc2a50c5d0&quot;,&quot;href&quot;:&quot;https://api.nexmo.com/v0.1/conversations/CON-2ddb95d7-d674-4098-b309-90cc2a50c5d0&quot;}&#x27;}]</span><br/><span class="error">E       assert 3 == 0</span><br/><span class="error">E         +3</span><br/><span class="error">E         -0</span><br/><br/>test_project/test_user_api.py:109: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Requested Payload: {}
+Response Code: 200.
+Response Text: {&quot;id&quot;:&quot;CON-ce47742a-d1d6-4c0c-8ad3-af77a9b70670&quot;,&quot;href&quot;:&quot;https://api.nexmo.com/v0.1/conversations/CON-ce47742a-d1d6-4c0c-8ad3-af77a9b70670&quot;}
+Requested Payload: {&#x27;name&#x27;: &#x27;  &#x27;}
+Response Code: 200.
+Response Text: {&quot;id&quot;:&quot;CON-f9d22fe7-a326-44c8-949b-99bede65715d&quot;,&quot;href&quot;:&quot;https://api.nexmo.com/v0.1/conversations/CON-f9d22fe7-a326-44c8-949b-99bede65715d&quot;}
+Requested Payload: {&#x27;name&#x27;: &#x27;&#x27;}
+Response Code: 200.
+Response Text: {&quot;id&quot;:&quot;CON-2ddb95d7-d674-4098-b309-90cc2a50c5d0&quot;,&quot;href&quot;:&quot;https://api.nexmo.com/v0.1/conversations/CON-2ddb95d7-d674-4098-b309-90cc2a50c5d0&quot;}
+Requested Payload: {&#x27;name&#x27;: 895652}
+Response Code: 400.
+Response Text: {&quot;description&quot;:&quot;Input validation failure.&quot;,&quot;error&quot;:{&quot;name&quot;:[&quot;\&quot;name\&quot; must be a string&quot;]},&quot;code&quot;:&quot;http:error:validation-fail&quot;}
+Requested Payload: {&#x27;name&#x27;: True}
+Response Code: 400.
+Response Text: {&quot;description&quot;:&quot;Input validation failure.&quot;,&quot;error&quot;:{&quot;name&quot;:[&quot;\&quot;name\&quot; must be a string&quot;]},&quot;code&quot;:&quot;http:error:validation-fail&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_project/test_user_api.py::test_app_flow_test_case_1</td>
+          <td class="col-duration">1.63</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_app_flow_test_case_1():<br/>        &quot;&quot;&quot;Complete flow scenario&quot;&quot;&quot;<br/>        user_id, conversation_id, member_id = None, None, None<br/>        # Create user<br/>        user_data = {<br/>            &quot;name&quot;: &quot;test_user_name12&quot;,<br/>            &quot;display_name&quot;: &quot;Test User Name12&quot;<br/>        }<br/>        user_res = create_user(user_data)<br/>        res_data = user_res.json()<br/>&gt;       assert user_res.status_code in range(200,300), &quot;Failed to create user with payload: %s&quot; % user_data<br/><span class="error">E       AssertionError: Failed to create user with payload: {&#x27;name&#x27;: &#x27;test_user_name12&#x27;, &#x27;display_name&#x27;: &#x27;Test User Name12&#x27;}</span><br/><span class="error">E       assert 400 in range(200, 300)</span><br/><span class="error">E        +  where 400 = &lt;Response [400]&gt;.status_code</span><br/><span class="error">E        +  and   range(200, 300) = range(200, 300)</span><br/><br/>test_project/test_user_api.py:162: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_project/test_user_api.py::test_app_flow_test_case_2</td>
+          <td class="col-duration">6.84</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_app_flow_test_case_2():<br/>        &quot;&quot;&quot;Create user and conversation and delete user then try to create member.&quot;&quot;&quot;<br/>        user_id, conversation_id, member_id = None, None, None<br/>        # Create user<br/>        user_data = {<br/>            &quot;name&quot;: &quot;test_user_name22&quot;,<br/>            &quot;display_name&quot;: &quot;Test User Name22&quot;<br/>        }<br/>        user_res = create_user(user_data)<br/>        res_data = user_res.json()<br/>        assert user_res.status_code in range(200,300), &quot;Failed to create user with payload: %s&quot; % user_data<br/>        assert res_data.get(&#x27;id&#x27;), &quot;Couldn&#x27;t get user ID in response.&quot;<br/>        user_id = res_data[&#x27;id&#x27;]<br/>        # create conversation<br/>        conversation_data = {<br/>            &quot;name&quot;: &quot;test_user_name2_chat2&quot;,<br/>            &quot;display_name&quot;: &quot;Test User Name2 Chat2&quot;,<br/>        }<br/>        conv_res = create_conversation(conversation_data)<br/>        res_data = conv_res.json()<br/>        assert conv_res.status_code in range(200,300), &quot;Failed to create conversation with payload: %s&quot; % conversation_data<br/>        assert res_data.get(&#x27;id&#x27;), &quot;Couldn&#x27;t get conversation ID in response.&quot;<br/>        conversation_id = res_data[&#x27;id&#x27;]<br/>        # Delete User<br/>        res = delete_user(user_id)<br/>        assert res.status_code in range(200,300), &quot;Failed to delete the user.&quot;<br/>        # Create members<br/>        member_data = {<br/>            &quot;user_id&quot;: user_id<br/>        }<br/>        mem_res = create_member(conversation_id, member_data)<br/>        res_data = mem_res.json()<br/>        assert mem_res.status_code not in range(200,300), &quot;Member is created by using the user id of deleted user.&quot;<br/>&gt;       assert res_data.get(&#x27;id&#x27;), &quot;Couldn&#x27;t get member ID in response.&quot;<br/><span class="error">E       AssertionError: Couldn&#x27;t get member ID in response.</span><br/><span class="error">E       assert None</span><br/><span class="error">E        +  where None = &lt;built-in method get of dict object at 0x7f1572736100&gt;(&#x27;id&#x27;)</span><br/><span class="error">E        +    where &lt;built-in method get of dict object at 0x7f1572736100&gt; = {&#x27;code&#x27;: &#x27;http:error:validation-fail&#x27;, &#x27;description&#x27;: &#x27;Input validation failure.&#x27;, &#x27;error&#x27;: {&#x27;action&#x27;: [&#x27;&quot;action&quot; is required&#x27;], &#x27;channel&#x27;: [&#x27;&quot;channel&quot; is required&#x27;]}}.get</span><br/><br/>test_project/test_user_api.py:227: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_project/test_user_api.py::test_app_flow_test_case_3</td>
+          <td class="col-duration">5.01</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_app_flow_test_case_3():<br/>        &quot;&quot;&quot;Create user and conversation and delete conversation then try to create member.&quot;&quot;&quot;<br/>        user_id, conversation_id, member_id = None, None, None<br/>        # Create user<br/>        user_data = {<br/>            &quot;name&quot;: &quot;test_user_name32&quot;,<br/>            &quot;display_name&quot;: &quot;Test User Name32&quot;<br/>        }<br/>        user_res = create_user(user_data)<br/>        res_data = user_res.json()<br/>        assert user_res.status_code in range(200,300), &quot;Failed to create user with payload: %s&quot; % user_data<br/>        assert res_data.get(&#x27;id&#x27;), &quot;Couldn&#x27;t get user ID in response.&quot;<br/>        user_id = res_data[&#x27;id&#x27;]<br/>        # create conversation<br/>        conversation_data = {<br/>            &quot;name&quot;: &quot;test_user_name3_chat2&quot;,<br/>            &quot;display_name&quot;: &quot;Test User Name3 Chat2&quot;,<br/>        }<br/>        conv_res = create_conversation(conversation_data)<br/>        res_data = conv_res.json()<br/>        assert conv_res.status_code in range(200,300), &quot;Failed to create conversation with payload: %s&quot; % conversation_data<br/>        assert res_data.get(&#x27;id&#x27;), &quot;Couldn&#x27;t get conversation ID in response.&quot;<br/>        conversation_id = res_data[&#x27;id&#x27;]<br/>    <br/>        # Delete conversation<br/>        res = delete_user(conversation_id)<br/>&gt;       assert res.status_code in range(200,300), &quot;Failed to delete the conversation.&quot;<br/><span class="error">E       AssertionError: Failed to delete the conversation.</span><br/><span class="error">E       assert 404 in range(200, 300)</span><br/><span class="error">E        +  where 404 = &lt;Response [404]&gt;.status_code</span><br/><span class="error">E        +  and   range(200, 300) = range(200, 300)</span><br/><br/>test_project/test_user_api.py:264: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_project/test_user_api.py::test_app_flow_test_case_4</td>
+          <td class="col-duration">4.59</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_app_flow_test_case_4():<br/>        &quot;&quot;&quot;Create user and conversation and delete both the user and conversation then try to create member.&quot;&quot;&quot;<br/>        user_id, conversation_id, member_id = None, None, None<br/>        # Create user<br/>        user_data = {<br/>            &quot;name&quot;: &quot;test_user_name42&quot;,<br/>            &quot;display_name&quot;: &quot;Test User Name42&quot;<br/>        }<br/>        user_res = create_user(user_data)<br/>        res_data = user_res.json()<br/>        assert user_res.status_code in range(200,300), &quot;Failed to create user with payload: %s&quot; % user_data<br/>        assert res_data.get(&#x27;id&#x27;), &quot;Couldn&#x27;t get user ID in response.&quot;<br/>        user_id = res_data[&#x27;id&#x27;]<br/>        # create conversation<br/>        conversation_data = {<br/>            &quot;name&quot;: &quot;test_user_name4_chat2&quot;,<br/>            &quot;display_name&quot;: &quot;Test User Name4 Chat2&quot;,<br/>        }<br/>        conv_res = create_conversation(conversation_data)<br/>        res_data = conv_res.json()<br/>        assert conv_res.status_code in range(200,300), &quot;Failed to create conversation with payload: %s&quot; % conversation_data<br/>        assert res_data.get(&#x27;id&#x27;), &quot;Couldn&#x27;t get conversation ID in response.&quot;<br/>        conversation_id = res_data[&#x27;id&#x27;]<br/>    <br/>        # Delete conversation<br/>        res = delete_user(conversation_id)<br/>&gt;       assert res.status_code in range(200,300), &quot;Failed to delete the conversation.&quot;<br/><span class="error">E       AssertionError: Failed to delete the conversation.</span><br/><span class="error">E       assert 404 in range(200, 300)</span><br/><span class="error">E        +  where 404 = &lt;Response [404]&gt;.status_code</span><br/><span class="error">E        +  and   range(200, 300) = range(200, 300)</span><br/><br/>test_project/test_user_api.py:311: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_project/test_user_api.py::test_duplicate_user_data</td>
+          <td class="col-duration">3.23</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_project/test_user_api.py::test_invalid_token</td>
+          <td class="col-duration">1.39</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>For invalid token, got a response Code: 401.
+Response Text: {&quot;description&quot;:&quot;You did not provide a valid token. Please provide a valid token.&quot;,&quot;code&quot;:&quot;system:error:invalid-token&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_project/test_user_api.py::test_empty_token</td>
+          <td class="col-duration">1.40</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>For empty token, got a response Code: 401.
+Response Text: {&quot;description&quot;:&quot;You did not provide a valid token. Please provide a valid token.&quot;,&quot;code&quot;:&quot;system:error:invalid-token&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_project/test_user_api.py::test_without_token</td>
+          <td class="col-duration">1.50</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>For without token, got a response Code: 401.
+Response Text: {&quot;description&quot;:&quot;You did not provide a valid token. Please provide a valid token.&quot;,&quot;code&quot;:&quot;system:error:invalid-token&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_project/test_user_api.py::test_expired_token</td>
+          <td class="col-duration">1.63</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>
